@@ -70,15 +70,15 @@ def list_bucket_objects(bucket=None):
 def move_bucket_objects(
     source_bucket=None, destination_bucket=None, prefix=None, **kwargs
 ):
-    storage_objects = kwargs["ti"].xcom_pull(task_id=T_LIST_DATA)
+    storage_objects = kwargs["ti"].xcom_pull(task_ids=T_LIST_DATA)
     hook = GoogleCloudStorageHook()
     for storage_object in storage_objects:
         destination_object = storage_object
         if prefix:
             destination_object = "{}/{}".format(prefix, destination_object)
-
-        hook.copy(source_bucket, destination_bucket)
-        hook.delete(source_bucket)
+        # opy(self, source_bucket, source_object, destination_bucket=None, destination_object=None)
+        hook.copy(source_bucket, storage_object, destination_bucket, destination_object)
+        hook.delete(source_bucket, storage_object)
 
 
 with DAG(
@@ -133,4 +133,4 @@ with DAG(
     )
 
 
-list_files >> load_data >> filter_latest >> move_bucket_objects
+list_files >> load_data >> filter_latest >> move_files
