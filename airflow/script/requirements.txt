@@ -1,0 +1,3 @@
+pymongo
+apache-airflow['google, gpc']
+google-api-python-client
