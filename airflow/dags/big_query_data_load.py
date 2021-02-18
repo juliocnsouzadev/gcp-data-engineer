@@ -3,6 +3,7 @@ import json
 import time
 from datetime import datetime, timedelta
 from airflow import DAG
+from airflow.models import Variable
 from airflow.utils.dates import days_ago
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.http_operator import SimpleHttpOperator
@@ -21,12 +22,12 @@ OWNER_NAME = "Julio Souza"
 EMAILS = ["juliocnsouzadev@gmail.com"]
 
 # gpc
-PROJECT_ID = "muvirtua"
-BIG_QUERY_DATASET = "vehicle_analysis"
-LANING_BUCKET = "01-logistics-landing"
-BACKUP_BUCKET = "01-logistics-backup"
-BQ_HISTORY_TABLE = PROJECT_ID + "." + BIG_QUERY_DATASET + ".history"
-BQ_LATEST_TABLE = PROJECT_ID + "." + BIG_QUERY_DATASET + ".latest"
+PROJECT_ID = Variable.get("project")
+BIG_QUERY_DATASET = Variable.get("bq_dataset")
+LANING_BUCKET = Variable.get("landing_bucket")
+BACKUP_BUCKET = Variable.get("backup_bucket")
+BQ_HISTORY_TABLE = "{}.{}.history".format(PROJECT_ID, BIG_QUERY_DATASET)
+BQ_LATEST_TABLE = "{}.{}.latest".format(PROJECT_ID, BIG_QUERY_DATASET)
 
 # tasks ids
 T_LOAD_DATA = "LOAD_DATA"
