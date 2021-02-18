@@ -13,6 +13,7 @@ from airflow.contrib.hooks.gcp_pubsub_hook import PubSubHook
 
 from airflow.contrib.operators.gcs_to_bq import GoogleCloudStorageToBigQueryOperator
 from airflow.contrib.operators.bigquery_operator import BigQueryOperator
+from airflow.contrib.hooks.gcs_hook import GoogleCloudStorageHook
 
 # settings
 DAG_NAME = "LOAD-DATA-INTO-BIGQUERY"
@@ -27,8 +28,9 @@ BQ_HISTORY_TABLE = PROJECT_ID + "." + BIG_QUERY_DATASET + ".history"
 BQ_LATEST_TABLE = PROJECT_ID + "." + BIG_QUERY_DATASET + ".latest"
 
 # tasks ids
-T1_ID = "T1-LOAD_DATA"
-T2_ID = "T1-FILTER_LATEST"
+T_LOAD_DATA = "LOAD_DATA"
+T_LIST_DATA = "LIST_DATA"
+T_FILTER_LATEST = "FILTER_LATEST"
 
 LATEST_QUERY = """
 SELECT * except (rank)
@@ -54,7 +56,15 @@ default_arguments = {
     "retry_delay": timedelta(seconds=5),
     "start_date": days_ago(1),
     "project_id": PROJECT_ID,
+    "max_active_runs": 1,
 }
+
+
+def list_bucket_objects(bucket=None):
+    hook = GoogleCloudStorageHook()
+    storage_objects = hook.list(bucket)
+    return storage_objects
+
 
 with DAG(
     DAG_NAME,
@@ -65,8 +75,14 @@ with DAG(
 
     # Tasks
 
-    t1 = GoogleCloudStorageToBigQueryOperator(
-        task_id=T1_ID,
+    list_files = PythonOperator(
+        task_id=T_LIST_DATA,
+        python_callable=list_bucket_objects,
+        op_kwargs={"bucket": LANING_BUCKET},
+    )
+
+    load_data = GoogleCloudStorageToBigQueryOperator(
+        task_id=T_LOAD_DATA,
         bucket=LANING_BUCKET,
         source_objects=["*"],
         skip_leading_rows=1,
@@ -78,8 +94,8 @@ with DAG(
         google_cloud_storage_conn_id="google_cloud_default",
     )
 
-    t2 = BigQueryOperator(
-        task_id=T2_ID,
+    filter_latest = BigQueryOperator(
+        task_id=T_FILTER_LATEST,
         sql=LATEST_QUERY,
         destination_dataset_table=BQ_LATEST_TABLE,
         write_disposition="WRITE_TRUNCATE",
@@ -89,4 +105,5 @@ with DAG(
         bigquery_conn_id="google_cloud_default",
     )
 
-t1 >> t2
+
+list_files >> load_data >> filter_latest
