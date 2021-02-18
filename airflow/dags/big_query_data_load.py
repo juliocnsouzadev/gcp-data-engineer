@@ -51,9 +51,9 @@ with DAG(
     t1 = GoogleCloudStorageToBigQueryOperator(
         task_id=T1_ID,
         bucket=LANING_BUCKET,
-        source_object=["*"],
-        skip_rows="",
-        fiel_delimiter=",",
+        source_objects=["*"],
+        skip_leading_rows=1,
+        field_delimiter=",",
         destination_project_dataset_table=PROJECT_ID
         + "."
         + BIG_QUERY_DATASET
@@ -62,5 +62,4 @@ with DAG(
         write_disposition="WRITE_APPEND",
         bigquery_conn_id="google_cloud_default",
         google_cloud_storage_conn_id="google_cloud_default",
-        project_id=PROJECT_ID,
     )
