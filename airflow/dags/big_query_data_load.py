@@ -24,6 +24,7 @@ EMAILS = ["juliocnsouzadev@gmail.com"]
 PROJECT_ID = "muvirtua"
 BIG_QUERY_DATASET = "vehicle_analysis"
 LANING_BUCKET = "01-logistics-landing"
+BACKUP_BUCKET = "01-logistics-backup"
 BQ_HISTORY_TABLE = PROJECT_ID + "." + BIG_QUERY_DATASET + ".history"
 BQ_LATEST_TABLE = PROJECT_ID + "." + BIG_QUERY_DATASET + ".latest"
 
@@ -31,6 +32,7 @@ BQ_LATEST_TABLE = PROJECT_ID + "." + BIG_QUERY_DATASET + ".latest"
 T_LOAD_DATA = "LOAD_DATA"
 T_LIST_DATA = "LIST_DATA"
 T_FILTER_LATEST = "FILTER_LATEST"
+T_MOVE_DATA = "MOVE_DATA"
 
 LATEST_QUERY = """
 SELECT * except (rank)
@@ -40,11 +42,9 @@ FROM (
     ROW_NUMBER() OVER (
         PARTITION BY vehicle_id ORDER BY DATETIME(date, TIME(hour, minute, 0)) DESC
     ) as rank
-    FROM `{}`) as latest
+    FROM `{{history_table}}`) as latest
 WHERE rank = 1;
-""".format(
-    BQ_HISTORY_TABLE
-)
+"""
 
 default_arguments = {
     "owner": OWNER_NAME,
@@ -66,11 +66,26 @@ def list_bucket_objects(bucket=None):
     return storage_objects
 
 
+def move_bucket_objects(
+    source_bucket=None, destination_bucket=None, prefix=None, **kwargs
+):
+    storage_objects = kwargs["ti"].xcom_pull(task_id=T_LIST_DATA)
+    hook = GoogleCloudStorageHook()
+    for storage_object in storage_objects:
+        destination_object = storage_object
+        if prefix:
+            destination_object = "{}/{}".format(prefix, destination_object)
+
+        hook.copy(source_bucket, destination_bucket)
+        hook.delete(source_bucket)
+
+
 with DAG(
     DAG_NAME,
     schedule_interval=timedelta(hours=1),
     catchup=False,
     default_args=default_arguments,
+    user_defined_macros={"project": PROJECT_ID, "history_table": BQ_HISTORY_TABLE},
 ) as dag:
 
     # Tasks
@@ -105,5 +120,16 @@ with DAG(
         bigquery_conn_id="google_cloud_default",
     )
 
+    move_files = PythonOperator(
+        task_id=T_MOVE_DATA,
+        python_callable=move_bucket_objects,
+        op_kwargs={
+            "source_bucket": LANING_BUCKET,
+            "destination_bucket": BACKUP_BUCKET,
+            "prefix": "{{ts_nodash}}",
+        },
+        provide_context=True,
+    )
 
-list_files >> load_data >> filter_latest
+
+list_files >> load_data >> filter_latest >> move_bucket_objects
