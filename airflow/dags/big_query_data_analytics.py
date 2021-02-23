@@ -16,7 +16,10 @@ PROJECT_ID = Variable.get("project")
 BUCKET_SPARK = Variable.get("logistics-spark")
 
 # task ids
-T_CREATE_CLUSTER = "t_create_cluster"
+T_CREATE_CLUSTER = "create_cluster"
+T_ASSESS_DAY = "assess_day"
+T_WEEKDAY_ANALYTICS = "week_day_analytics"
+T_WEEKEND_ANALYTICS = "weekend_analytics"
 
 default_arguments = {
     "owner": OWNER_NAME,
@@ -31,6 +34,14 @@ default_arguments = {
     "max_active_runs": 1,
 }
 
+
+def assess_day(execution_date=None):
+    date = datetime.strptime(execution_date, "%Y-%m-%d")
+    if date.isoweekday() < 6:
+        return T_WEEKDAY_ANALYTICS
+    return T_WEEKEND_ANALYTICS
+
+
 with DAG(
     DAG_NAME,
     schedule_interval="0 20 * * *",
@@ -38,7 +49,7 @@ with DAG(
     default_args=default_arguments,
 ) as dag:
 
-    create_cluster = DataprocClustCreateOperator(
+    t_create_cluster = DataprocClustCreateOperator(
         task_id=T_CREATE_CLUSTER,
         project_id=PROJECT_ID,
         cluster_name="spark-cluster-{{ts_nodash}}",
@@ -47,4 +58,10 @@ with DAG(
         zone="us-east1",
     )
 
-create_cluster
+    t_assess_day = BranchPythonOperator(
+        task_id=T_ASSESS_DAY,
+        python_callable=assess_day,
+        op_kwargs={"execution_date": "{{ds}}"},
+    )
+
+t_create_cluster >> t_assess_day
