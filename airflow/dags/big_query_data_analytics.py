@@ -1,11 +1,14 @@
 from datetime import datetime, timedelta
+from weekday_pyspark_subdag import weekday_subdag
 
 from airflow import DAG
+from airflow.operators.subdag_operator import SubDagOperator
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
-from airflow.contrib.operators.dataproc_operartor import (
-    DataprocClustCreateOperator,
+from airflow.contrib.operators.dataproc_operator import (
+    DataprocClusterCreateOperator,
+    DataprocClusterDeleteOperator,
     DataProcPySparkOperator,
 )
 
@@ -17,13 +20,13 @@ EMAILS = ["juliocnsouzadev@gmail.com"]
 # gpc
 PROJECT_ID = Variable.get("project")
 BUCKET_SPARK = Variable.get("logistics-spark")
-LATEST_PYSPARK_JAR = "gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar"
+LATEST_PYSPARK_JAR = ["gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar"]
 WEEKEND_FOLDER_PATH = "pyspark/weekend"
 WEEK_DAY_FOLDER_PATH = "pyspark/weekday"
 WEEKEND_SPARK_JOB_FILE = "gas_composition_count.py"
 WEEKDAY_SPARK_JOB_FILES = [
     "avg_speed.py",
-    " avg_temperature.py",
+    "avg_temperature.py",
     "avg_tire_pressure.py",
 ]
 
@@ -32,6 +35,9 @@ T_CREATE_CLUSTER = "create_cluster"
 T_ASSESS_DAY = "assess_day"
 T_WEEKDAY_ANALYTICS = "week_day_analytics"
 T_WEEKEND_ANALYTICS = "weekend_analytics"
+T_DELETE_CLUSTER = "delete_cluster"
+
+SCHEDULE_INTERVAL = "0 20 * * *"
 
 default_arguments = {
     "owner": OWNER_NAME,
@@ -56,12 +62,12 @@ def assess_day(execution_date=None):
 
 with DAG(
     DAG_NAME,
-    schedule_interval="0 20 * * *",
+    schedule_interval=SCHEDULE_INTERVAL,
     catchup=False,
     default_args=default_arguments,
 ) as dag:
 
-    t_create_cluster = DataprocClustCreateOperator(
+    t_create_cluster = DataprocClusterCreateOperator(
         task_id=T_CREATE_CLUSTER,
         project_id=PROJECT_ID,
         cluster_name="spark-cluster-{{ts_nodash}}",
@@ -82,8 +88,32 @@ with DAG(
             BUCKET_SPARK, WEEKEND_FOLDER_PATH, WEEKEND_SPARK_JOB_FILE
         ),
         cluster_name="spark-cluster-{{ts_nodash}}",
-        dataproc_pyspark_jars=LATEST_PYSPARK_JAR,
     )
 
-t_create_cluster >> t_assess_day
-t_assess_day >> [t_weekend_analytics]
+    t_weekday_analytics = SubDagOperator(
+        task_id=T_WEEKDAY_ANALYTICS,
+        subdag=weekday_subdag(
+            parent_dag=DAG_NAME,
+            task_id=T_WEEKDAY_ANALYTICS,
+            schedule_interval=SCHEDULE_INTERVAL,
+            default_args=default_arguments,
+            cluster_name="spark-cluster-{{ts_nodash}}",
+            job_files_paths=[
+                "gs://{}/{}/{}".format(BUCKET_SPARK, WEEKEND_FOLDER_PATH, job_file)
+                for job_file in WEEKDAY_SPARK_JOB_FILES
+            ],
+        ),
+    )
+
+    t_delete_cluster = DataprocClusterDeleteOperator(
+        task_id=T_DELETE_CLUSTER,
+        project_id=PROJECT_ID,
+        cluster_name="spark-cluster-{{ts_nodash}}",
+        trigger_rule="all_done",
+        region="us-east1",
+    )
+
+t_create_cluster >> t_assess_day >> [
+    t_weekend_analytics,
+    t_weekday_analytics,
+] >> t_delete_cluster
