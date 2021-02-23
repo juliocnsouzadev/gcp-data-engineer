@@ -1,3 +1,9 @@
+"""
+# Run spark job files on Cloud Dataproc
+ - weekday jobs
+ - weekend jobs
+"""
+
 from datetime import datetime, timedelta
 from weekday_pyspark_subdag import weekday_subdag
 
@@ -67,28 +73,39 @@ with DAG(
     default_args=default_arguments,
 ) as dag:
 
+    dag.doc_md = __doc__
+
     t_create_cluster = DataprocClusterCreateOperator(
         task_id=T_CREATE_CLUSTER,
         project_id=PROJECT_ID,
-        cluster_name="spark-cluster-{{ts_nodash}}",
+        cluster_name="spark-cluster-{{ds_nodash}}",
         num_workers=2,
         storage_bucket=BUCKET_SPARK,
         zone="us-east1",
     )
+    t_create_cluster.doc_md = """
+    ## Create a Dataproc for processing the spark jobs
+    """
 
     t_assess_day = BranchPythonOperator(
         task_id=T_ASSESS_DAY,
         python_callable=assess_day,
         op_kwargs={"execution_date": "{{ds}}"},
     )
+    t_assess_day.doc_md = """
+    ## Asseses if the the is a week or weekend day
+    """
 
     t_weekend_analytics = DataProcPySparkOperator(
         task_id=T_WEEKEND_ANALYTICS,
         main="gs://{}/{}/{}".format(
             BUCKET_SPARK, WEEKEND_FOLDER_PATH, WEEKEND_SPARK_JOB_FILE
         ),
-        cluster_name="spark-cluster-{{ts_nodash}}",
+        cluster_name="spark-cluster-{{ds_nodash}}",
     )
+    t_weekend_analytics.doc_md = """
+    ## Process weekend spark jobs
+    """
 
     t_weekday_analytics = SubDagOperator(
         task_id=T_WEEKDAY_ANALYTICS,
@@ -97,21 +114,27 @@ with DAG(
             task_id=T_WEEKDAY_ANALYTICS,
             schedule_interval=SCHEDULE_INTERVAL,
             default_args=default_arguments,
-            cluster_name="spark-cluster-{{ts_nodash}}",
+            cluster_name="spark-cluster-{{ds_nodash}}",
             job_files_paths=[
                 "gs://{}/{}/{}".format(BUCKET_SPARK, WEEKEND_FOLDER_PATH, job_file)
                 for job_file in WEEKDAY_SPARK_JOB_FILES
             ],
         ),
     )
+    t_weekday_analytics.doc_md = """
+    ## Process week day spark jobs
+    """
 
     t_delete_cluster = DataprocClusterDeleteOperator(
         task_id=T_DELETE_CLUSTER,
         project_id=PROJECT_ID,
-        cluster_name="spark-cluster-{{ts_nodash}}",
+        cluster_name="spark-cluster-{{ds_nodash}}",
         trigger_rule="all_done",
         region="us-east1",
     )
+    t_delete_cluster.doc_md = """
+    ## Deletes the Dataproc cluster
+    """
 
 t_create_cluster >> t_assess_day >> [
     t_weekend_analytics,
