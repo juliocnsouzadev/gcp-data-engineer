@@ -4,7 +4,10 @@ from airflow import DAG
 from airflow.models import Variable
 from airflow.utils.dates import days_ago
 from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
-from airflow.contrib.operators.dataproc_operartor import DataprocClustCreateOperator
+from airflow.contrib.operators.dataproc_operartor import (
+    DataprocClustCreateOperator,
+    DataProcPySparkOperator,
+)
 
 # settings
 DAG_NAME = "RUN_SPARK_JOBS"
@@ -14,6 +17,15 @@ EMAILS = ["juliocnsouzadev@gmail.com"]
 # gpc
 PROJECT_ID = Variable.get("project")
 BUCKET_SPARK = Variable.get("logistics-spark")
+LATEST_PYSPARK_JAR = "gs://spark-lib/bigquery/spark-bigquery-latest_2.12.jar"
+WEEKEND_FOLDER_PATH = "pyspark/weekend"
+WEEK_DAY_FOLDER_PATH = "pyspark/weekday"
+WEEKEND_SPARK_JOB_FILE = "gas_composition_count.py"
+WEEKDAY_SPARK_JOB_FILES = [
+    "avg_speed.py",
+    " avg_temperature.py",
+    "avg_tire_pressure.py",
+]
 
 # task ids
 T_CREATE_CLUSTER = "create_cluster"
@@ -64,4 +76,14 @@ with DAG(
         op_kwargs={"execution_date": "{{ds}}"},
     )
 
+    t_weekend_analytics = DataProcPySparkOperator(
+        task_id=T_WEEKEND_ANALYTICS,
+        main="gs://{}/{}/{}".format(
+            BUCKET_SPARK, WEEKEND_FOLDER_PATH, WEEKEND_SPARK_JOB_FILE
+        ),
+        cluster_name="spark-cluster-{{ts_nodash}}",
+        dataproc_pyspark_jars=LATEST_PYSPARK_JAR,
+    )
+
 t_create_cluster >> t_assess_day
+t_assess_day >> [t_weekend_analytics]
