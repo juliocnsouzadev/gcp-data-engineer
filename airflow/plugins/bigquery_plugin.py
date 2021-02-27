@@ -2,8 +2,10 @@ from airflow import BaseOperator
 from airflow.contrib.hooks.bigquery_hooks import BigQueryHook
 from airflow.exceptions import AirflowException
 from airflow.puglins_manager import AirflowPlugin
+from airflow.sensors.base_sensor_operator import BaseSensorOperator
 from airflow.utils.decorators import apply_defaults
 from google.cloud import bigquery
+from googleapiclient.errors import HttpError
 
 
 class BigQueryDataValidationOperator(BaseOperator):
@@ -54,6 +56,43 @@ class BigQueryDataValidationOperator(BaseOperator):
         self.log.info("Test passed on Query: {}\nRecords: {}".format(self.sql, records))
 
 
+class BigQueryDatasetSensor(BaseSensorOperator):
+
+    template_fields = ["project_id", "dataset_id"]
+    ui_color = "#4b0082"
+
+    def __init__(
+        self,
+        project_id,
+        dataset_id,
+        gcp_conn_id="google_cloud_default",
+        *args,
+        **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self.project_id = project_id
+        self.dataset_id = dataset_id
+        self.gcp_conn_id = gcp_conn_id
+
+    def poke(self, context):
+        # initialise bigquery hook
+        hook = BigQueryHook(bigquery_conn_id=self.gcp_conn_id)
+        # get bigquery service object
+        service = hook.get_service()
+        # check if dataset exists
+        try:
+            service.datasets().get(
+                dataset_id=self.dataset_id, project_id=self.project_id
+            ).execute()
+            return True
+        except HttpError as e:
+            if e.resp["status"] == "404":
+                return False
+
+            raise AirflowException("Error: {}".format(e))
+
+
 class BigQueryPlugin(AirflowPlugin):
     name = "bigquery_plugin"
     operators = [BigQueryDataValidationOperator]
+    sensors = [BigQueryDatasetSensor]
