@@ -2,19 +2,18 @@ import base64
 import json
 import time
 from datetime import datetime, timedelta
+
 from airflow import DAG
+from airflow.contrib.hooks.gcp_pubsub_hook import PubSubHook
+from airflow.contrib.hooks.gcs_hook import GoogleCloudStorageHook
+from airflow.contrib.operators.bigquery_operator import BigQueryOperator
+from airflow.contrib.operators.gcs_to_bq import GoogleCloudStorageToBigQueryOperator
 from airflow.models import Variable
-from airflow.utils.dates import days_ago
 from airflow.operators.dummy import DummyOperator
 from airflow.operators.http_operator import SimpleHttpOperator
-from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
+from airflow.operators.python_operator import BranchPythonOperator, PythonOperator
 from airflow.providers.http.hooks.http import HttpHook
-from airflow.contrib.hooks.gcp_pubsub_hook import PubSubHook
-
-
-from airflow.contrib.operators.gcs_to_bq import GoogleCloudStorageToBigQueryOperator
-from airflow.contrib.operators.bigquery_operator import BigQueryOperator
-from airflow.contrib.hooks.gcs_hook import GoogleCloudStorageHook
+from airflow.utils.dates import days_ago
 
 # settings
 DAG_NAME = "LOAD-DATA-INTO-BIGQUERY"

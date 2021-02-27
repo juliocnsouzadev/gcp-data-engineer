@@ -1,8 +1,8 @@
 from airflow import BaseOperator
+from airflow.contrib.hooks.bigquery_hooks import BigQueryHook
 from airflow.exceptions import AirflowException
 from airflow.puglins_manager import AirflowPlugin
 from airflow.utils.decorators import apply_defaults
-from airflow.contrib.hooks.bigquery_hooks import BigQueryHook
 from google.cloud import bigquery
 
 

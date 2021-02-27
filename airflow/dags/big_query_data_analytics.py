@@ -5,18 +5,19 @@
 """
 
 from datetime import datetime, timedelta
-from weekday_pyspark_subdag import weekday_subdag
 
 from airflow import DAG
-from airflow.operators.subdag_operator import SubDagOperator
-from airflow.models import Variable
-from airflow.utils.dates import days_ago
-from airflow.operators.python_operator import PythonOperator, BranchPythonOperator
 from airflow.contrib.operators.dataproc_operator import (
     DataprocClusterCreateOperator,
     DataprocClusterDeleteOperator,
     DataProcPySparkOperator,
 )
+from airflow.models import Variable
+from airflow.operators.python_operator import BranchPythonOperator, PythonOperator
+from airflow.operators.subdag_operator import SubDagOperator
+from airflow.utils.dates import days_ago
+
+from weekday_pyspark_subdag import weekday_subdag
 
 # settings
 DAG_NAME = "RUN_SPARK_JOBS"
