@@ -13,7 +13,7 @@ from airflow.contrib.operators.dataproc_operator import (
     DataProcPySparkOperator,
 )
 from airflow.models import Variable
-from airflow.operators.python_operator import BranchPythonOperator, PythonOperator
+from airflow.operators.python_operator import BranchPythonOperator
 from airflow.operators.subdag_operator import SubDagOperator
 from airflow.utils.dates import days_ago
 
