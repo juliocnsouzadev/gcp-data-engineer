@@ -41,6 +41,7 @@ services:
       - 8080:8080
     volumes:
       - ./dags:/opt/airflow/dags
+      - ./plugins:/opt/airflow/plugins
       - ./logs:/opt/airflow/logs
       - ./data:/opt/airflow/data
       - ./files:/opt/airflow/files
