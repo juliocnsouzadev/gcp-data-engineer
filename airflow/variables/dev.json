@@ -2,5 +2,6 @@
     "project" : "muvirtua",
     "bq_dataset" : "vehicle_analysis",
     "landing_bucket" : "01-logistics-landing",
-    "backup_bucket" : "01-logistics-backup"
+    "backup_bucket" : "01-logistics-backup",
+    "logistics-spark":"01-logistics-spark"
 }
